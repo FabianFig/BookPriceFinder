@@ -13,7 +13,7 @@ jobs:
       - name: Create zip
         run: |
           mkdir -p dist
-          zip -r dist/bookpricefinder.zip . -x "**/.git/**" "**/.venv/**" "**/__pycache__/**" "**/*.pyc" "**/dist/**" "**/build/**"
+          zip -r dist/bookpricefinder.zip . -x "**/.git/**" "**/.venv/**" "**/__pycache__/**" "**/*.pyc" "**/dist/**" "**/build/**" "**/.github/**" "**/tests/**" "**/.claude/**"
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:

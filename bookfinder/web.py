@@ -4,11 +4,12 @@ import csv
 import html
 import io
 import time
+from collections import defaultdict
 from math import ceil
 from urllib.parse import urlencode
 
-from fastapi import FastAPI, Form, Query
-from fastapi.responses import HTMLResponse, RedirectResponse, StreamingResponse
+from fastapi import FastAPI, Form, Query, Request
+from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse, StreamingResponse
 
 from bookfinder.db.database import PriceDatabase
 from bookfinder.models import BookQuery
@@ -16,9 +17,19 @@ from bookfinder.search import search_all
 
 app = FastAPI()
 
+
+@app.get("/health")
+async def health() -> JSONResponse:
+    return JSONResponse({"status": "ok"})
+
+
 _CACHE_TTL_SECONDS = 300
 _CACHE_MAX_ITEMS = 50
 _CACHE: dict[tuple[str, int, bool], tuple[float, list]] = {}
+
+# Rate limiting: per-IP cooldown
+_RATE_LIMIT_SECONDS = 5
+_LAST_SEARCH: dict[str, float] = defaultdict(float)
 
 
 def _esc(value: str) -> str:
@@ -108,6 +119,13 @@ def _render_page(
           th, td {{ border: 1px solid var(--border); padding: 0.5rem; text-align: left; }}
           th {{ background: var(--head); }}
           .muted {{ color: var(--muted); font-size: 0.9rem; }}
+          @media (max-width: 768px) {{
+            body {{ margin: 0.75rem; }}
+            table {{ font-size: 0.85rem; display: block; overflow-x: auto; }}
+            .controls {{ flex-direction: column; align-items: flex-start; }}
+            input, button, select {{ width: 100%; box-sizing: border-box; }}
+            h1 {{ font-size: 1.4rem; }}
+          }}
         </style>
       </head>
       <body>
@@ -427,7 +445,7 @@ def _render_results(
     """
 
     return _render_page(
-        compare_table + table + pagination + save_form + export_form,
+        save_form + compare_table + table + pagination + export_form,
         query=query,
         max_results=max_results,
         page_size=page_size,
@@ -444,6 +462,7 @@ def _render_results(
 
 @app.get("/search", response_class=HTMLResponse)
 async def search_get(
+    request: Request,
     query: str = Query(""),
     max_results: int = Query(5),
     page_size: int = Query(25),
@@ -456,6 +475,9 @@ async def search_get(
     sources: list[str] = Query([]),
     isbn_only: str | None = Query(None),
 ):
+    if not query or not query.strip():
+        return _render_page("<p>Please enter a search query.</p>")
+
     def _to_float(value: str | None) -> float | None:
         if value is None or value == "":
             return None
@@ -467,6 +489,16 @@ async def search_get(
     min_val = _to_float(min_price)
     max_val = _to_float(max_price)
     isbn_flag = _bool_value(isbn_only)
+
+    # Per-IP rate limiting
+    client_ip = request.client.host if request.client else "unknown"
+    now = time.time()
+    if now - _LAST_SEARCH[client_ip] < _RATE_LIMIT_SECONDS:
+        return _render_page(
+            "<p>Please wait a few seconds between searches.</p>",
+            query=query,
+        )
+    _LAST_SEARCH[client_ip] = now
 
     results = await _cached_search(query, max_results, isbn_flag)
     available_sources = sorted({r.source for r in results})
@@ -512,7 +544,10 @@ async def search_post(
     condition: str = Form(""),
     sources: list[str] = Form([]),
     isbn_only: str | None = Form(None),
-):
+) -> RedirectResponse | HTMLResponse:
+    if not query or not query.strip():
+        return _render_page("<p>Please enter a search query.</p>")
+
     params = dict(
         query=query,
         max_results=max_results,
