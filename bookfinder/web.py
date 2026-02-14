@@ -13,7 +13,7 @@ from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse, Stre
 
 from bookfinder.db.database import PriceDatabase
 from bookfinder.models import BookQuery
-from bookfinder.search import search_all
+from bookfinder.search import SearchReport, search_all_with_report
 
 app = FastAPI()
 
@@ -25,7 +25,7 @@ async def health() -> JSONResponse:
 
 _CACHE_TTL_SECONDS = 300
 _CACHE_MAX_ITEMS = 50
-_CACHE: dict[tuple[str, int, bool], tuple[float, list]] = {}
+_CACHE: dict[tuple[str, int, bool], tuple[float, SearchReport]] = {}
 
 # Rate limiting: per-IP cooldown
 _RATE_LIMIT_SECONDS = 5
@@ -46,7 +46,7 @@ def _bool_value(value: str | None) -> bool:
     return value.lower() in {"1", "true", "yes", "on"}
 
 
-async def _cached_search(query: str, max_results: int, isbn_only: bool):
+async def _cached_search(query: str, max_results: int, isbn_only: bool) -> SearchReport:
     key = (query, max_results, isbn_only)
     now = time.time()
     cached = _CACHE.get(key)
@@ -58,14 +58,14 @@ async def _cached_search(query: str, max_results: int, isbn_only: bool):
         isbn=query if isbn_only else "",
         max_results=max_results,
     )
-    results = await search_all(book_query)
-    _CACHE[key] = (now, results)
+    report = await search_all_with_report(book_query)
+    _CACHE[key] = (now, report)
 
     if len(_CACHE) > _CACHE_MAX_ITEMS:
         oldest_key = min(_CACHE, key=lambda k: _CACHE[k][0])
         _CACHE.pop(oldest_key, None)
 
-    return results
+    return report
 
 
 def _render_page(
@@ -130,11 +130,11 @@ def _render_page(
       </head>
       <body>
         <h1>BookPriceFinder</h1>
-        <form method="post" action="/search">
+        <form method="post" action="/search" id="searchForm">
           <input name="query" placeholder="Search books" required value="{_esc(query)}" />
           <input name="max_results" type="number" min="1" max="50" value="{max_results}" />
           <input name="page_size" type="number" min="5" max="100" value="{page_size}" />
-          <button type="submit">Search</button>
+          <button type="submit" id="searchBtn">Search</button>
           <button type="button" id="themeToggle">Toggle theme</button>
           <div class="controls">
             <label>
@@ -232,6 +232,14 @@ def _render_page(
               cb.checked = checked;
             }});
           }});
+
+          document.getElementById('searchForm')?.addEventListener('submit', () => {{
+            const btn = document.getElementById('searchBtn');
+            if (btn) {{
+              btn.disabled = true;
+              btn.textContent = 'Searching...';
+            }}
+          }});
         </script>
       </body>
     </html>
@@ -327,6 +335,7 @@ def _render_results(
     sources: list[str],
     selected_sources: list[str],
     isbn_only: bool,
+    report: SearchReport | None = None,
 ):
     if not results:
         return _render_page(
@@ -343,6 +352,17 @@ def _render_results(
             selected_sources=selected_sources,
             isbn_only=isbn_only,
         )
+
+    # Source status summary
+    source_status = ""
+    if report:
+        status_parts = []
+        for name, count in sorted(report.source_counts.items()):
+            status_parts.append(f"{_esc(name)}: {count} results")
+        for name, err in sorted(report.errors.items()):
+            status_parts.append(f"<span style='color:red'>{_esc(name)}: failed</span>")
+        if status_parts:
+            source_status = f"<p class='muted'>{' &middot; '.join(status_parts)}</p>"
 
     compare = _compare_lowest_per_source(results)
     compare_rows = "".join(
@@ -445,7 +465,7 @@ def _render_results(
     """
 
     return _render_page(
-        save_form + compare_table + table + pagination + export_form,
+        source_status + save_form + compare_table + table + pagination + export_form,
         query=query,
         max_results=max_results,
         page_size=page_size,
@@ -500,7 +520,8 @@ async def search_get(
         )
     _LAST_SEARCH[client_ip] = now
 
-    results = await _cached_search(query, max_results, isbn_flag)
+    report = await _cached_search(query, max_results, isbn_flag)
+    results = report.results
     available_sources = sorted({r.source for r in results})
 
     filtered = _apply_filters(
@@ -529,6 +550,7 @@ async def search_get(
         sources=available_sources,
         selected_sources=sources,
         isbn_only=isbn_flag,
+        report=report,
     )
 
 
@@ -617,11 +639,11 @@ async def saved_search(id: int = Query(...)):
     sources = params.get("sources", [])
     isbn_only = _bool_value(params.get("isbn_only"))
 
-    results = await _cached_search(query, max_results, isbn_only)
-    available_sources = sorted({r.source for r in results})
+    report = await _cached_search(query, max_results, isbn_only)
+    available_sources = sorted({r.source for r in report.results})
 
     filtered = _apply_filters(
-        results,
+        report.results,
         filter_text=filter_text,
         min_price=float(min_price) if min_price else None,
         max_price=float(max_price) if max_price else None,
@@ -646,6 +668,7 @@ async def saved_search(id: int = Query(...)):
         sources=available_sources,
         selected_sources=sources,
         isbn_only=isbn_only,
+        report=report,
     )
 
 
