@@ -46,6 +46,16 @@ def _bool_value(value: str | None) -> bool:
     return value.lower() in {"1", "true", "yes", "on"}
 
 
+def _looks_like_isbn(query: str) -> bool:
+    """Check if a query looks like an ISBN-10 or ISBN-13."""
+    cleaned = query.replace("-", "").replace(" ", "").strip()
+    if len(cleaned) == 13 and cleaned.isdigit():
+        return True
+    if len(cleaned) == 10 and (cleaned.isdigit() or (cleaned[:9].isdigit() and cleaned[9] in "0123456789Xx")):
+        return True
+    return False
+
+
 async def _cached_search(query: str, max_results: int, isbn_only: bool) -> SearchReport:
     key = (query, max_results, isbn_only)
     now = time.time()
@@ -132,9 +142,10 @@ def _render_page(
         <h1>BookPriceFinder</h1>
         <form method="post" action="/search" id="searchForm">
           <input name="query" placeholder="Search books" required value="{_esc(query)}" />
-          <input name="max_results" type="number" min="1" max="50" value="{max_results}" />
-          <input name="page_size" type="number" min="5" max="100" value="{page_size}" />
+          <input name="max_results" type="number" min="1" max="50" value="{max_results}" placeholder="Max results" title="Max results per source" />
+          <input name="page_size" type="number" min="5" max="100" value="{page_size}" placeholder="Page size" title="Results per page" />
           <button type="submit" id="searchBtn">Search</button>
+          <a href="/wishlist" style="padding:0.5rem;font-size:1rem;">Wishlist</a>
           <button type="button" id="themeToggle">Toggle theme</button>
           <div class="controls">
             <label>
@@ -389,7 +400,9 @@ def _render_results(
     rows = "".join(
         f"<tr><td>{_esc(r.source)}</td><td>{_esc(r.title)}</td><td>{_esc(r.author)}</td>"
         f"<td>${r.total_price:.2f}</td><td>{_esc(r.condition.value)}</td>"
-        f"<td><a href='{_esc(r.url)}' target='_blank'>link</a></td></tr>"
+        f"<td><a href='{_esc(r.url)}' target='_blank'>link</a></td>"
+        f"<td><a href='/wishlist?add_title={_esc(r.title)}&add_author={_esc(r.author)}"
+        f"&add_isbn={_esc(r.isbn)}&add_price={r.total_price:.2f}' title='Add to wishlist'>+</a></td></tr>"
         for r in page_results
     )
 
@@ -399,7 +412,7 @@ def _render_results(
       <thead>
         <tr>
           <th>Source</th><th>Title</th><th>Author</th>
-          <th>Price</th><th>Condition</th><th>URL</th>
+          <th>Price</th><th>Condition</th><th>URL</th><th></th>
         </tr>
       </thead>
       <tbody>{rows}</tbody>
@@ -511,7 +524,7 @@ async def search_get(
 
     min_val = _to_float(min_price)
     max_val = _to_float(max_price)
-    isbn_flag = _bool_value(isbn_only)
+    isbn_flag = _bool_value(isbn_only) or _looks_like_isbn(query)
 
     # Per-IP rate limiting
     client_ip = request.client.host if request.client else "unknown"
@@ -734,3 +747,71 @@ async def export(
         media_type="text/csv",
         headers={"Content-Disposition": f"attachment; filename={filename}"},
     )
+
+
+@app.get("/wishlist", response_class=HTMLResponse)
+async def wishlist_page(
+    add_title: str = Query(""),
+    add_author: str = Query(""),
+    add_isbn: str = Query(""),
+    add_price: str = Query(""),
+):
+    with PriceDatabase() as db:
+        entries = db.get_wishlist()
+
+    entry_rows = "".join(
+        f"<tr><td>{e['id']}</td><td>{_esc(e['title'])}</td>"
+        f"<td>{_esc(e['author'] or '-')}</td><td>{_esc(e['isbn'] or '-')}</td>"
+        f"<td>{'${:.2f}'.format(e['max_price']) if e['max_price'] else '-'}</td>"
+        f"<td><form method='post' action='/wishlist/delete' style='margin:0'>"
+        f"<input type='hidden' name='wishlist_id' value='{e['id']}' />"
+        f"<button type='submit'>Remove</button></form></td></tr>"
+        for e in entries
+    )
+
+    table = ""
+    if entries:
+        table = f"""
+        <table>
+          <thead>
+            <tr><th>ID</th><th>Title</th><th>Author</th><th>ISBN</th><th>Max Price</th><th></th></tr>
+          </thead>
+          <tbody>{entry_rows}</tbody>
+        </table>
+        """
+    else:
+        table = "<p class='muted'>Wishlist is empty.</p>"
+
+    add_form = f"""
+    <h3>Add to wishlist</h3>
+    <form method="post" action="/wishlist/add">
+      <div class="controls">
+        <input name="title" placeholder="Title" required value="{_esc(add_title)}" />
+        <input name="author" placeholder="Author" value="{_esc(add_author)}" />
+        <input name="isbn" placeholder="ISBN" value="{_esc(add_isbn)}" />
+        <input name="max_price" type="number" step="0.01" min="0" placeholder="Max price" value="{_esc(add_price)}" />
+        <button type="submit">Add</button>
+      </div>
+    </form>
+    """
+
+    return _render_page(f"<h2>Wishlist</h2>{table}{add_form}")
+
+
+@app.post("/wishlist/add")
+async def wishlist_add(
+    title: str = Form(...),
+    author: str = Form(""),
+    isbn: str = Form(""),
+    max_price: float | None = Form(None),
+):
+    with PriceDatabase() as db:
+        db.add_to_wishlist(title, author, isbn, max_price)
+    return RedirectResponse(url="/wishlist", status_code=303)
+
+
+@app.post("/wishlist/delete")
+async def wishlist_delete(wishlist_id: int = Form(...)):
+    with PriceDatabase() as db:
+        db.remove_from_wishlist(wishlist_id)
+    return RedirectResponse(url="/wishlist", status_code=303)
