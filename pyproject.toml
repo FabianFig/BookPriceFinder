@@ -1,0 +1,42 @@
+[project]
+name = "bookpricefinder"
+version = "0.1.0"
+description = "Find the best book prices across multiple sites"
+authors = [{name = "Fabian Figueroa"}]
+readme = "README.md"
+license = {text = "MIT"}
+requires-python = ">=3.10"
+keywords = ["books", "price-comparison", "web-scraping", "cli", "used-books"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: End Users/Desktop",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Internet :: WWW/HTTP :: Indexing/Search",
+    "Topic :: Utilities",
+]
+dependencies = [
+    "httpx>=0.27",
+    "beautifulsoup4>=4.12",
+    "rich>=13.0",
+    "click>=8.1",
+]
+
+[project.urls]
+Homepage = "https://github.com/FabianFig/BookPriceFinder"
+Repository = "https://github.com/FabianFig/BookPriceFinder"
+Issues = "https://github.com/FabianFig/BookPriceFinder/issues"
+
+[project.optional-dependencies]
+browser = ["playwright>=1.40"]
+web = ["fastapi>=0.110", "uvicorn>=0.29", "python-multipart>=0.0.9"]
+dev = ["pytest", "pytest-asyncio", "ruff"]
+
+[project.scripts]
+bookfinder = "bookfinder.cli:main"
+
+[tool.ruff]
+line-length = 100

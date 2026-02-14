@@ -1,0 +1,24 @@
+# BookPriceFinder configuration
+# Copy this file to ~/.config/bookfinder/config.toml
+
+currency = "USD"
+max_results = 10
+
+# Add custom sites below. Each site needs:
+#   - name: display name
+#   - base_url: the site's homepage
+#   - search_url_template: search URL with {query} placeholder
+#
+# The generic adapter will try to extract prices from Schema.org
+# structured data (JSON-LD) on the search results page.
+# This works best with sites that embed Product/Offer markup.
+
+# [[sites]]
+# name = "MyBookStore"
+# base_url = "https://mybookstore.com"
+# search_url_template = "https://mybookstore.com/search?q={query}"
+
+# [[sites]]
+# name = "Another Store"
+# base_url = "https://anotherstore.com"
+# search_url_template = "https://anotherstore.com/find?term={query}"
