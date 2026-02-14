@@ -168,11 +168,11 @@ def _render_page(
             </label>
             <label>
               Min price
-              <input name="min_price" type="number" step="0.01" placeholder="0.00" value="{min_price or ''}" />
+              <input name="min_price" type="number" step="0.50" min="0" placeholder="0.00" value="{min_price or ''}" />
             </label>
             <label>
               Max price
-              <input name="max_price" type="number" step="0.01" placeholder="99.99" value="{max_price or ''}" />
+              <input name="max_price" type="number" step="0.50" min="0" placeholder="99.99" value="{max_price or ''}" />
             </label>
             <label>
               Condition
