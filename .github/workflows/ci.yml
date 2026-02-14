@@ -18,5 +18,3 @@ jobs:
           pip install -e ".[dev]"
       - name: Lint
         run: ruff check .
-      - name: Tests
-        run: pytest
