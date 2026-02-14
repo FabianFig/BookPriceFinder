@@ -221,7 +221,8 @@ def init(force: bool):
 @main.command()
 @click.option("--host", default="127.0.0.1", help="Host to bind the web UI.")
 @click.option("--port", default=8000, type=int, help="Port for the web UI.")
-def web(host: str, port: int):
+@click.option("--reload", is_flag=True, help="Auto-reload on code changes (for development).")
+def web(host: str, port: int, reload: bool):
     """Run the minimal web UI (requires the web extra)."""
     try:
         import uvicorn
@@ -232,7 +233,7 @@ def web(host: str, port: int):
         )
         return
 
-    uvicorn.run("bookfinder.web:app", host=host, port=port, reload=False)
+    uvicorn.run("bookfinder.web:app", host=host, port=port, reload=reload)
 
 
 @main.command()

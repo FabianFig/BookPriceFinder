@@ -234,6 +234,7 @@ Run the minimal web UI (requires the `web` extra).
 |--------|-------------|
 | `--host TEXT` | Host to bind to (default: `127.0.0.1`) |
 | `--port N` | Port to listen on (default: `8000`) |
+| `--reload` | Auto-reload on code changes (for development) |
 
 ## Data Storage
 
