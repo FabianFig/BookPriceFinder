@@ -569,7 +569,7 @@ async def search_post(
     condition: str = Form(""),
     sources: list[str] = Form([]),
     isbn_only: str | None = Form(None),
-) -> RedirectResponse | HTMLResponse:
+):
     if not query or not query.strip():
         return _render_page("<p>Please enter a search query.</p>")
 
