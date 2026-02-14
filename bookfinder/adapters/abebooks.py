@@ -95,13 +95,13 @@ class AbeBooksAdapter(BaseAdapter):
                     if ship_match:
                         shipping = float(ship_match.group(1))
 
-            # Build URL
-            href = str(title_el.get("href", "")) if title_el and title_el.name == "a" else ""
-            if not href:
-                link = title_el.find("a") if title_el else None
-                if not link:
-                    link = item.select_one("a[data-test-id='listing-title']")
-                href = str(link.get("href", "")) if link else ""
+            # Build URL — find the first product link in the listing
+            link = (
+                item.select_one("a[data-test-id='listing-title']")
+                or item.select_one("a[href*='/bd']")
+                or item.select_one("a[href]")
+            )
+            href = str(link.get("href", "")) if link else ""
             url = href if href.startswith("http") else f"https://www.abebooks.com{href}"
 
             results.append(
