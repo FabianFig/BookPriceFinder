@@ -4,6 +4,7 @@ HPB has aggressive bot protection (403 for plain HTTP requests).
 Uses Playwright headless browser when available, falls back to httpx.
 """
 
+import logging
 import re
 
 import httpx
@@ -69,7 +70,7 @@ class HPBAdapter(BaseAdapter):
 
         page_text = soup.get_text(" ", strip=True).lower()
         if "we got lost in a good book" in page_text:
-            print("[warning] Half Price Books blocked the request.")
+            logging.getLogger(__name__).warning("Half Price Books blocked the request.")
             return []
 
         cards = (

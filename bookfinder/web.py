@@ -356,13 +356,16 @@ def _render_results(
     # Source status summary
     source_status = ""
     if report:
+        total = len(results)
+        elapsed = f"{report.elapsed:.1f}s" if report.elapsed else ""
+        header = f"Found {total} results in {elapsed}" if elapsed else f"Found {total} results"
         status_parts = []
         for name, count in sorted(report.source_counts.items()):
-            status_parts.append(f"{_esc(name)}: {count} results")
+            status_parts.append(f"{_esc(name)}: {count}")
         for name, err in sorted(report.errors.items()):
             status_parts.append(f"<span style='color:red'>{_esc(name)}: failed</span>")
-        if status_parts:
-            source_status = f"<p class='muted'>{' &middot; '.join(status_parts)}</p>"
+        detail = f" ({' &middot; '.join(status_parts)})" if status_parts else ""
+        source_status = f"<p class='muted'>{header}{detail}</p>"
 
     compare = _compare_lowest_per_source(results)
     compare_rows = "".join(
