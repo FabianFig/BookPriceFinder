@@ -1,10 +1,9 @@
 """SQLite database for price history tracking and wishlists."""
 
 import sqlite3
-from datetime import datetime
 from pathlib import Path
 
-from bookfinder.models import BookResult, Condition
+from bookfinder.models import BookResult
 
 DEFAULT_DB_PATH = Path.home() / ".local" / "share" / "bookfinder" / "prices.db"
 

@@ -1,7 +1,6 @@
 """Generic adapter for Schema.org Product/Offer data."""
 
 import json
-import re
 
 import httpx
 from bs4 import BeautifulSoup

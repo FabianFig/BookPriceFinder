@@ -415,7 +415,7 @@ def _render_results(
       <input type=\"hidden\" name=\"max_price\" value=\"{max_price or ''}\" />
       <input type=\"hidden\" name=\"condition\" value=\"{_esc(condition)}\" />
       <input type=\"hidden\" name=\"isbn_only\" value=\"{'1' if isbn_only else ''}\" />
-      {''.join(f"<input type=\"hidden\" name=\"sources\" value=\"{_esc(s)}\" />" for s in selected_sources)}
+      {''.join('<input type=\"hidden\" name=\"sources\" value=\"' + _esc(s) + '\" />' for s in selected_sources)}
       <button type=\"submit\">Export CSV</button>
     </form>
     """

@@ -62,7 +62,6 @@ class AbeBooksAdapter(BaseAdapter):
             author_el = item.select_one('[data-test-id="listing-author"]')
             price_el = item.select_one('[data-test-id="item-price"]')
             cond_el = item.select_one('[data-test-id="listing-book-condition"]')
-            detail_cond_el = item.select_one('[data-test-id="listing-optional-condition"]')
 
             title = (name_meta["content"] if name_meta else
                      title_el.get_text(strip=True) if title_el else "")
@@ -85,10 +84,7 @@ class AbeBooksAdapter(BaseAdapter):
 
             # Shipping info
             shipping = None
-            ship_text = ""
             ship_el = item.select_one('[data-test-id="listing-shipping-rate-popover"]')
-            if ship_el:
-                ship_text = ship_el.get_text(strip=True).lower()
             # Check buy box for free shipping
             buy_box = item.select_one('[data-test-id^="buy-box-data"]')
             if buy_box:

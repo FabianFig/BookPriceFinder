@@ -118,7 +118,7 @@ def search(
     # Save to price history
     if not no_save and not offline:
         with PriceDatabase() as db:
-            saved = db.save_results(results)
+            db.save_results(results)
             # Check for wishlist deals
             deals = db.check_wishlist_deals(results)
             for entry, result in deals:
