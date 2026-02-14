@@ -405,6 +405,12 @@ def _render_results(
     </div>
     """
 
+    # Build sources hidden inputs outside f-string to avoid Python 3.10 escape issues
+    sources_inputs = ''.join(
+        f'<input type="hidden" name="sources" value="{_esc(s)}" />'
+        for s in selected_sources
+    )
+
     export_form = f"""
     <form method=\"get\" action=\"/export\" style=\"margin-top: 0.75rem;\">
       <input type=\"hidden\" name=\"query\" value=\"{_esc(query)}\" />
@@ -415,7 +421,7 @@ def _render_results(
       <input type=\"hidden\" name=\"max_price\" value=\"{max_price or ''}\" />
       <input type=\"hidden\" name=\"condition\" value=\"{_esc(condition)}\" />
       <input type=\"hidden\" name=\"isbn_only\" value=\"{'1' if isbn_only else ''}\" />
-      {''.join('<input type=\"hidden\" name=\"sources\" value=\"' + _esc(s) + '\" />' for s in selected_sources)}
+      {sources_inputs}
       <button type=\"submit\">Export CSV</button>
     </form>
     """

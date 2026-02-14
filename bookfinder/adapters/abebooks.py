@@ -84,7 +84,6 @@ class AbeBooksAdapter(BaseAdapter):
 
             # Shipping info
             shipping = None
-            ship_el = item.select_one('[data-test-id="listing-shipping-rate-popover"]')
             # Check buy box for free shipping
             buy_box = item.select_one('[data-test-id^="buy-box-data"]')
             if buy_box:
