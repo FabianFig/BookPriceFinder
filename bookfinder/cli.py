@@ -81,7 +81,7 @@ def search(
 
     if offline:
         with PriceDatabase() as db:
-            cached = db.get_recent_results(isbn=isbn, title=query, limit=max_results * 10)
+            cached = db.get_recent_results(isbn=isbn, title=query, limit=max_results)
         results = [
             BookResult(
                 title=row["title"],

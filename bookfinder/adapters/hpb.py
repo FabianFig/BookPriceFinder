@@ -105,7 +105,7 @@ class HPBAdapter(BaseAdapter):
             if "new" in condition_text:
                 condition = Condition.NEW
 
-            href = link_el.get("href", "") if link_el else ""
+            href = str(link_el.get("href", "")) if link_el else ""
             url = href if href.startswith("http") else f"https://www.hpb.com{href}"
 
             results.append(

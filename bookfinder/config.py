@@ -4,10 +4,12 @@ import tomllib
 from dataclasses import dataclass, field
 from pathlib import Path
 
+from platformdirs import user_config_dir
+
 _PROJECT_ROOT = Path(__file__).resolve().parents[1]
 _EXAMPLE_CONFIG = _PROJECT_ROOT / "config.example.toml"
 
-DEFAULT_CONFIG_PATH = Path.home() / ".config" / "bookfinder" / "config.toml"
+DEFAULT_CONFIG_PATH = Path(user_config_dir("bookfinder")) / "config.toml"
 
 
 @dataclass

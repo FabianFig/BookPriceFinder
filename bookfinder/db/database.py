@@ -3,9 +3,11 @@
 import sqlite3
 from pathlib import Path
 
+from platformdirs import user_data_dir
+
 from bookfinder.models import BookResult
 
-DEFAULT_DB_PATH = Path.home() / ".local" / "share" / "bookfinder" / "prices.db"
+DEFAULT_DB_PATH = Path(user_data_dir("bookfinder")) / "prices.db"
 
 _SCHEMA = """
 CREATE TABLE IF NOT EXISTS price_history (
@@ -169,7 +171,7 @@ class PriceDatabase:
             (title, author, isbn, max_price),
         )
         self._conn.commit()
-        return cursor.lastrowid
+        return cursor.lastrowid or 0
 
     def remove_from_wishlist(self, wishlist_id: int) -> bool:
         """Remove a book from the wishlist by ID."""
@@ -223,7 +225,7 @@ class PriceDatabase:
             (name, json.dumps(params)),
         )
         self._conn.commit()
-        return cursor.lastrowid
+        return cursor.lastrowid or 0
 
     def list_saved_searches(self) -> list[dict]:
         """List saved search presets."""

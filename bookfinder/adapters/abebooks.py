@@ -63,14 +63,14 @@ class AbeBooksAdapter(BaseAdapter):
             price_el = item.select_one('[data-test-id="item-price"]')
             cond_el = item.select_one('[data-test-id="listing-book-condition"]')
 
-            title = (name_meta["content"] if name_meta else
-                     title_el.get_text(strip=True) if title_el else "")
+            title = str(name_meta["content"] if name_meta else
+                       title_el.get_text(strip=True) if title_el else "")
             if not title or not price_el:
                 continue
 
-            author = (author_meta["content"] if author_meta else
-                      author_el.get_text(strip=True) if author_el else "Unknown")
-            isbn = isbn_meta["content"] if isbn_meta else ""
+            author = str(author_meta["content"] if author_meta else
+                         author_el.get_text(strip=True) if author_el else "Unknown")
+            isbn = str(isbn_meta["content"]) if isbn_meta else ""
 
             price = _parse_price(price_el.get_text())
 
@@ -96,12 +96,12 @@ class AbeBooksAdapter(BaseAdapter):
                         shipping = float(ship_match.group(1))
 
             # Build URL
-            href = title_el.get("href", "") if title_el and title_el.name == "a" else ""
+            href = str(title_el.get("href", "")) if title_el and title_el.name == "a" else ""
             if not href:
                 link = title_el.find("a") if title_el else None
                 if not link:
                     link = item.select_one("a[data-test-id='listing-title']")
-                href = link.get("href", "") if link else ""
+                href = str(link.get("href", "")) if link else ""
             url = href if href.startswith("http") else f"https://www.abebooks.com{href}"
 
             results.append(

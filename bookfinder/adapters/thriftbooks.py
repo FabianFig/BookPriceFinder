@@ -87,7 +87,7 @@ class ThriftBooksAdapter(BaseAdapter):
 
             # Link
             link = tile.find("a", href=re.compile(r"/w/"))
-            href = link.get("href", "") if link else ""
+            href = str(link.get("href", "")) if link else ""
             url = href if href.startswith("http") else f"https://www.thriftbooks.com{href}"
             # Strip tracking params
             if "#" in url:

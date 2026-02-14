@@ -120,8 +120,8 @@ cp config.example.toml ~/.config/bookfinder/config.toml
 **Windows (PowerShell):**
 
 ```
-New-Item -ItemType Directory -Force -Path "$HOME\.config\bookfinder"
-Copy-Item config.example.toml "$HOME\.config\bookfinder\config.toml"
+New-Item -ItemType Directory -Force -Path "$env:APPDATA\bookfinder"
+Copy-Item config.example.toml "$env:APPDATA\bookfinder\config.toml"
 ```
 
 Or use the one-command setup (works on all platforms):
@@ -239,9 +239,9 @@ Run the minimal web UI (requires the `web` extra).
 
 Price history and wishlist data are stored locally at:
 
-- `~/.local/share/bookfinder/prices.db`
-
-On Windows, `~` expands to `C:\Users\<YourUsername>`.
+- **Linux:** `~/.local/share/bookfinder/prices.db`
+- **macOS:** `~/Library/Application Support/bookfinder/prices.db`
+- **Windows:** `C:\Users\<YourUsername>\AppData\Local\bookfinder\prices.db`
 
 **Privacy:** All data stays on your machine. The tool only scrapes public book listing pages and doesn't send your searches anywhere else.
 

@@ -58,7 +58,7 @@ class PangoBooksAdapter(BaseAdapter):
                 link = card
                 container = card
             else:
-                link = card.select_one("a[href*='/books/']") or card.select_one("a")
+                link = card.select_one("a[href*='/books/']") or card.select_one("a")  # type: ignore[assignment]
                 container = card
 
             title_el = (
@@ -81,7 +81,7 @@ class PangoBooksAdapter(BaseAdapter):
 
             href = ""
             if link:
-                href = link.get("href", "")
+                href = str(link.get("href", ""))
             url = href if href.startswith("http") else f"https://pangobooks.com{href}"
 
             condition = Condition.USED  # Used books
