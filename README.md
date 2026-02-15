@@ -6,7 +6,7 @@ Find the best book prices across multiple sites from a simple command-line inter
 
 ## About This Project
 
-This was originally built as a personal tool for home use with AI assistance and hands-on refinement. It worked well enough that a friend wanted to use it, so I'm making it public. Feel free to use it, modify it, or submit improvements.
+This was originally built with the assistance of AI as a personal tool for home use with hands-on refinement. It worked well enough that a friend wanted to use it, so I'm making it public. Feel free to use it, modify it, or submit improvements.
 
 Built for casual book buyers who love finding cheap, pre-loved used books. Searches typically take 5-10 seconds depending on how many sources you enable.
 
