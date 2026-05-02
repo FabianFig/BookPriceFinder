@@ -29,11 +29,6 @@ def get_all_adapters() -> list[BaseAdapter]:
     return _BUILTIN_ADAPTERS + _custom_adapters
 
 
-def register_adapter(adapter: BaseAdapter) -> None:
-    """Register a custom adapter at runtime."""
-    _custom_adapters.append(adapter)
-
-
 def register_generic(name: str, base_url: str, search_url_template: str) -> None:
     """Register a generic structured-data adapter."""
     _custom_adapters.append(GenericAdapter(name, base_url, search_url_template))

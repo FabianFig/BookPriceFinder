@@ -159,26 +159,6 @@ class PriceDatabase:
             )
         return [self._row_to_book_result(row) for row in cursor.fetchall()]
 
-    def get_lowest_price(self, isbn: str = "", title: str = "") -> Optional[BookResult]:
-        """Get the lowest price ever recorded for a book."""
-        where, param = ("", "")
-        if isbn:
-            where, param = "isbn = ?", isbn
-        elif title:
-            where, param = "title LIKE ?", f"%{title}%"
-        else:
-            return None
-
-        cursor = self._conn.execute(
-            f"""SELECT *, (price + COALESCE(shipping, 0)) AS total
-                FROM price_history
-                WHERE {where} AND price > 0
-                ORDER BY total ASC LIMIT 1""",
-            (param,),
-        )
-        row = cursor.fetchone()
-        return self._row_to_book_result(row) if row else None
-
     def get_average_price(self, isbn: str = "", title: str = "") -> float | None:
         """Get the average price for a book from history."""
         if isbn:
