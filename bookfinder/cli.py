@@ -10,7 +10,7 @@ from rich.table import Table
 from bookfinder.adapters.registry import register_generic
 from bookfinder.config import load_config
 from bookfinder.db.database import PriceDatabase
-from bookfinder.models import BookQuery, BookResult
+from bookfinder.models import BookQuery
 from bookfinder.search import search_all_with_report
 
 console = Console()

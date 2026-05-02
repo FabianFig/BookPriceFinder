@@ -2,7 +2,7 @@
 
 import time
 from math import ceil
-from typing import Any, Optional
+from typing import Optional
 
 from bookfinder.db.database import PriceDatabase
 from bookfinder.models import BookQuery, BookResult, SearchReport

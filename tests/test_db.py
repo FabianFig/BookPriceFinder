@@ -1,5 +1,4 @@
 import pytest
-from pathlib import Path
 from bookfinder.db.database import PriceDatabase
 from bookfinder.models import BookResult, Condition
 
