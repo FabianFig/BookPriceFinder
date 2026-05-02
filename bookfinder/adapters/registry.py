@@ -3,6 +3,7 @@
 from bookfinder.adapters.base import BaseAdapter
 from bookfinder.adapters.generic import GenericAdapter
 from bookfinder.adapters.abebooks import AbeBooksAdapter
+from bookfinder.adapters.gutenberg import GutenbergAdapter
 from bookfinder.adapters.hpb import HPBAdapter
 from bookfinder.adapters.openlibrary import OpenLibraryAdapter
 from bookfinder.adapters.pangobooks import PangoBooksAdapter
@@ -17,6 +18,7 @@ _BUILTIN_ADAPTERS: list[BaseAdapter] = [
     PangoBooksAdapter(),
     WorldOfBooksAdapter(),
     OpenLibraryAdapter(),
+    GutenbergAdapter(),
 ]
 
 _custom_adapters: list[BaseAdapter] = []

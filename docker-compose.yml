@@ -1,0 +1,8 @@
+services:
+  bookfinder:
+    build: .
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./data:/root/.local/share/bookfinder
+    restart: unless-stopped

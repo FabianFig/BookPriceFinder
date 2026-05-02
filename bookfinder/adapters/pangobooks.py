@@ -4,13 +4,12 @@ PangoBooks is a React SPA that loads search results client-side.
 Falls back gracefully if Playwright is not installed.
 """
 
-import re
-
 from bs4 import BeautifulSoup
 
 from bookfinder.adapters import _browser
 from bookfinder.adapters.base import BaseAdapter
-from bookfinder.models import BookQuery, BookResult, Condition
+from bookfinder.models import BookQuery, BookResult
+from bookfinder.utils.parsing import parse_condition, parse_price
 
 SEARCH_URL = "https://pangobooks.com/search"
 
@@ -31,9 +30,10 @@ class PangoBooksAdapter(BaseAdapter):
         search_term = query.isbn if query.isbn else query.query
         url = f"{SEARCH_URL}?q={search_term}"
 
+        # Broaden wait selector
         html = await _browser.fetch_rendered_html(
             url,
-            wait_selector="div[class*='book-tile'], a[href*='/books/']",
+            wait_selector="[data-testid*='book'], [class*='book'], [class*='listing']",
         )
 
         return self._parse(html)
@@ -45,11 +45,12 @@ class PangoBooksAdapter(BaseAdapter):
         soup = BeautifulSoup(html, "html.parser")
         results: list[BookResult] = []
 
-        # Find listing cards
+        # Find listing cards with broader patterns
         cards = (
-            soup.select("div[class*='book-tile'], div[class*='book-tile-wrapper']")
-            or soup.select("[class*='BookCard'], [class*='book-card']")
-            or soup.select("[class*='listing'], [class*='Listing']")
+            soup.select("[data-testid*='book-card']")
+            or soup.select("div[class*='book-tile']")
+            or soup.select("[class*='BookCard']")
+            or soup.select("[class*='listing-card']")
             or soup.select("a[href*='/books/']")
         )
 
@@ -62,11 +63,11 @@ class PangoBooksAdapter(BaseAdapter):
                 container = card
 
             title_el = (
-                container.select_one("[class*='title'], [class*='Title']")
+                container.select_one("[class*='title'], [class*='Title'], [data-testid*='title']")
                 or container.select_one("h2, h3, h4")
             )
-            author_el = container.select_one("[class*='author'], [class*='Author']")
-            price_el = container.select_one("[class*='price'], [class*='Price']")
+            author_el = container.select_one("[class*='author'], [class*='Author'], [data-testid*='author']")
+            price_el = container.select_one("[class*='price'], [class*='Price'], [data-testid*='price']")
             condition_el = container.select_one("[class*='condition'], [class*='Condition']")
 
             title = title_el.get_text(strip=True) if title_el else ""
@@ -75,7 +76,7 @@ class PangoBooksAdapter(BaseAdapter):
 
             price = 0.0
             if price_el:
-                price = _parse_price(price_el.get_text())
+                price = parse_price(price_el.get_text())
             if price <= 0:
                 continue
 
@@ -84,11 +85,7 @@ class PangoBooksAdapter(BaseAdapter):
                 href = str(link.get("href", ""))
             url = href if href.startswith("http") else f"https://pangobooks.com{href}"
 
-            condition = Condition.USED  # Used books
-            if condition_el:
-                cond_text = condition_el.get_text(strip=True).lower()
-                if "new" in cond_text or "like new" in cond_text:
-                    condition = Condition.NEW
+            condition = parse_condition(condition_el.get_text(strip=True) if condition_el else "used")
 
             results.append(
                 BookResult(
@@ -103,8 +100,3 @@ class PangoBooksAdapter(BaseAdapter):
             )
 
         return results
-
-
-def _parse_price(text: str) -> float:
-    match = re.search(r"\$?([\d,]+\.?\d*)", text.replace(",", ""))
-    return float(match.group(1)) if match else 0.0

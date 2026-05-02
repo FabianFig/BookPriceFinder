@@ -1,16 +1,10 @@
-"""AbeBooks adapter — HTML scraping with data-test-id selectors and microdata.
+"""AbeBooks adapter — HTML scraping with data-test-id selectors and microdata."""
 
-AbeBooks uses data-test-id attributes (Cypress-style) and Schema.org
-microdata (itemprop) on search results.
-"""
-
-import re
-
-import httpx
 from bs4 import BeautifulSoup
 
 from bookfinder.adapters.base import BaseAdapter
-from bookfinder.models import BookQuery, BookResult, Condition
+from bookfinder.models import BookQuery, BookResult
+from bookfinder.utils.parsing import parse_condition, parse_price, parse_shipping
 
 SEARCH_URL = "https://www.abebooks.com/servlet/SearchResults"
 
@@ -31,21 +25,8 @@ class AbeBooksAdapter(BaseAdapter):
         else:
             params["kn"] = query.query
 
-        async with httpx.AsyncClient(
-            follow_redirects=True,
-            headers={
-                "User-Agent": (
-                    "Mozilla/5.0 (X11; Linux x86_64; rv:120.0) "
-                    "Gecko/20100101 Firefox/120.0"
-                ),
-                "Accept-Language": "en-US,en;q=0.9",
-            },
-            timeout=20.0,
-        ) as client:
-            resp = await client.get(SEARCH_URL, params=params)
-            resp.raise_for_status()
-
-        return self._parse(resp.text)
+        html = await self._fetch_html(SEARCH_URL, params=params)
+        return self._parse(html)
 
     def _parse(self, html: str) -> list[BookResult]:
         soup = BeautifulSoup(html, "html.parser")
@@ -72,30 +53,16 @@ class AbeBooksAdapter(BaseAdapter):
                          author_el.get_text(strip=True) if author_el else "Unknown")
             isbn = str(isbn_meta["content"]) if isbn_meta else ""
 
-            price = _parse_price(price_el.get_text())
-
-            # Parse condition
-            condition = Condition.UNKNOWN
-            cond_text = cond_el.get_text(strip=True).lower() if cond_el else ""
-            if "new" in cond_text and "used" not in cond_text:
-                condition = Condition.NEW
-            elif "used" in cond_text:
-                condition = Condition.USED
+            price = parse_price(price_el.get_text())
+            condition = parse_condition(cond_el.get_text(strip=True) if cond_el else "")
 
             # Shipping info
             shipping = None
-            # Check buy box for free shipping
             buy_box = item.select_one('[data-test-id^="buy-box-data"]')
             if buy_box:
-                bb_text = buy_box.get_text()
-                if "Free S" in bb_text or "free shipping" in bb_text.lower():
-                    shipping = 0.0
-                else:
-                    ship_match = re.search(r"US\$\s*([\d.]+)\s*shipping", bb_text)
-                    if ship_match:
-                        shipping = float(ship_match.group(1))
+                shipping = parse_shipping(buy_box.get_text())
 
-            # Build URL — find the first product link in the listing
+            # Build URL
             link = (
                 item.select_one("a[data-test-id='listing-title']")
                 or item.select_one("a[href*='/bd']")
@@ -119,8 +86,3 @@ class AbeBooksAdapter(BaseAdapter):
             )
 
         return results
-
-
-def _parse_price(text: str) -> float:
-    match = re.search(r"[\d,]+\.?\d*", text.replace(",", ""))
-    return float(match.group()) if match else 0.0

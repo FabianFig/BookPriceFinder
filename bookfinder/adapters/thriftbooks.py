@@ -1,16 +1,11 @@
-"""ThriftBooks adapter — HTML scraping.
-
-ThriftBooks server-side renders search results with class names like
-AllEditionsItem-tile, SearchResultTileItem-topSector, etc.
-"""
+"""ThriftBooks adapter — HTML scraping."""
 
 import re
-
-import httpx
 from bs4 import BeautifulSoup
 
 from bookfinder.adapters.base import BaseAdapter
 from bookfinder.models import BookQuery, BookResult, Condition
+from bookfinder.utils.parsing import parse_condition, parse_price
 
 SEARCH_URL = "https://www.thriftbooks.com/browse/"
 
@@ -27,22 +22,8 @@ class ThriftBooksAdapter(BaseAdapter):
     async def search(self, query: BookQuery) -> list[BookResult]:
         search_term = query.isbn if query.isbn else query.query
         params = {"b.search": search_term}
-
-        async with httpx.AsyncClient(
-            follow_redirects=True,
-            headers={
-                "User-Agent": (
-                    "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 "
-                    "(KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
-                ),
-                "Accept-Language": "en-US,en;q=0.9",
-            },
-            timeout=20.0,
-        ) as client:
-            resp = await client.get(SEARCH_URL, params=params)
-            resp.raise_for_status()
-
-        return self._parse(resp.text)
+        html = await self._fetch_html(SEARCH_URL, params=params)
+        return self._parse(html)
 
     def _parse(self, html: str) -> list[BookResult]:
         soup = BeautifulSoup(html, "html.parser")
@@ -62,25 +43,25 @@ class ThriftBooksAdapter(BaseAdapter):
             if author_el:
                 author = re.sub(r"^By\s*", "", author_el.get_text(strip=True))
 
-            # Price/condition
+            # Price/condition/format
             row = tile.find(class_=re.compile(r"SearchResultTileItem-rowWrapper"))
             price = 0.0
             condition = Condition.USED
             if row:
                 row_text = row.get_text()
+                
+                # Filter out non-book media
+                row_lower = row_text.lower()
+                if any(media in row_lower for media in ["dvd", "vhs", "blu-ray", "audio cd", "cassette"]):
+                    continue
+
                 # Price
-                price_match = re.search(r"\$([\d,]+\.?\d*)", row_text)
-                if price_match:
-                    price = float(price_match.group(1).replace(",", ""))
+                price = parse_price(row_text)
 
                 # Condition
                 cond_match = re.search(r"Condition:\s*(\w[\w\s]*?)(?:$|Format|List|Save)", row_text)
                 if cond_match:
-                    cond_text = cond_match.group(1).strip().lower()
-                    if cond_text == "new":
-                        condition = Condition.NEW
-                    else:
-                        condition = Condition.USED
+                    condition = parse_condition(cond_match.group(1).strip())
 
             if price <= 0:
                 continue
@@ -89,11 +70,7 @@ class ThriftBooksAdapter(BaseAdapter):
             link = tile.find("a", href=re.compile(r"/w/"))
             href = str(link.get("href", "")) if link else ""
             url = href if href.startswith("http") else f"https://www.thriftbooks.com{href}"
-            # Strip tracking params
-            if "#" in url:
-                url = url.split("#")[0]
-            if "?" in url:
-                url = url.split("?")[0]
+            url = url.split("#")[0].split("?")[0] # Clean tracking
 
             results.append(
                 BookResult(

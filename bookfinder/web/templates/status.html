@@ -1,0 +1,32 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="space-y-8">
+  <h2 class="font-bold border-b pb-2">Source Health</h2>
+  {% if not health_groups %}
+    <p class="text-slate-400">No data.</p>
+  {% else %}
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+      {% for source, logs in health_groups.items() %}
+        {% set latest = logs[0] %}
+        <div class="border rounded p-4 text-xs">
+          <div class="flex justify-between font-bold mb-4">
+            <span>{{ source }}</span>
+            <span class="{{ 'text-green-600' if latest.success else 'text-red-600' }}">{{ 'OK' if latest.success else 'FAIL' }}</span>
+          </div>
+          <table class="w-full">
+            <tbody class="divide-y">
+              {% for log in logs[:3] %}
+              <tr>
+                <td class="py-1 text-slate-500">{{ log.searched_at.split(' ')[1] }}</td>
+                <td class="py-1 {{ 'text-green-600' if log.success else 'text-red-600' }}">{{ 'Success' if log.success else 'Error' }}</td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      {% endfor %}
+    </div>
+  {% endif %}
+</div>
+{% endblock %}

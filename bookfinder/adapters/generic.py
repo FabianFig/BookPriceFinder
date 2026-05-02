@@ -1,24 +1,23 @@
 """Generic adapter for Schema.org Product/Offer data."""
 
 import json
+import logging
+from typing import Any, Optional
 
 import httpx
 from bs4 import BeautifulSoup
 
 from bookfinder.adapters.base import BaseAdapter
-from bookfinder.models import BookQuery, BookResult, Condition
+from bookfinder.models import BookQuery, BookResult
+from bookfinder.utils.parsing import parse_condition
+
+log = logging.getLogger(__name__)
 
 
 class GenericAdapter(BaseAdapter):
     """Scrape any site that uses Schema.org Product/Offer structured data."""
 
     def __init__(self, name: str, base_url: str, search_url_template: str):
-        """
-        Args:
-            name: Display name for this source.
-            base_url: The site's base URL.
-            search_url_template: URL template with {query}.
-        """
         self._name = name
         self._base_url = base_url
         self._search_url_template = search_url_template
@@ -34,16 +33,12 @@ class GenericAdapter(BaseAdapter):
     async def search(self, query: BookQuery) -> list[BookResult]:
         search_term = query.isbn if query.isbn else query.query
         url = self._search_url_template.format(query=search_term)
-
-        async with httpx.AsyncClient(
-            follow_redirects=True,
-            headers={"User-Agent": "BookPriceFinder/0.1"},
-            timeout=15.0,
-        ) as client:
+        
+        # We need the final URL after redirects for metadata
+        async with httpx.AsyncClient(follow_redirects=True, headers=self.get_headers()) as client:
             resp = await client.get(url)
             resp.raise_for_status()
-
-        return self._parse_structured_data(resp.text, resp.url)
+            return self._parse_structured_data(resp.text, resp.url)
 
     def _parse_structured_data(self, html: str, page_url: httpx.URL) -> list[BookResult]:
         """Extract offers from JSON-LD."""
@@ -70,13 +65,8 @@ class GenericAdapter(BaseAdapter):
                     if price is None:
                         continue
 
-                    condition_raw = offer.get("itemCondition", "")
-                    if "New" in condition_raw:
-                        condition = Condition.NEW
-                    elif "Used" in condition_raw:
-                        condition = Condition.USED
-                    else:
-                        condition = Condition.UNKNOWN
+                    condition_raw = str(offer.get("itemCondition", ""))
+                    condition = parse_condition(condition_raw)
 
                     results.append(
                         BookResult(
@@ -93,10 +83,10 @@ class GenericAdapter(BaseAdapter):
         return results
 
 
-def _extract_author(item: dict) -> str:
+def _extract_author(item: dict[str, Any]) -> str:
     author = item.get("author", "")
     if isinstance(author, dict):
-        return author.get("name", "Unknown")
+        return str(author.get("name", "Unknown"))
     if isinstance(author, list):
         names = [a.get("name", "") if isinstance(a, dict) else str(a) for a in author]
         return ", ".join(n for n in names if n)

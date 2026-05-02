@@ -1,8 +1,8 @@
 """User configuration loaded from a TOML file."""
 
 import tomllib
-from dataclasses import dataclass, field
 from pathlib import Path
+from pydantic import BaseModel, Field
 
 from platformdirs import user_config_dir
 
@@ -12,18 +12,16 @@ _EXAMPLE_CONFIG = _PROJECT_ROOT / "config.example.toml"
 DEFAULT_CONFIG_PATH = Path(user_config_dir("bookfinder")) / "config.toml"
 
 
-@dataclass
-class SiteConfig:
+class SiteConfig(BaseModel):
     name: str
     base_url: str
     search_url_template: str
 
 
-@dataclass
-class Config:
+class Config(BaseModel):
     currency: str = "USD"
     max_results: int = 10
-    custom_sites: list[SiteConfig] = field(default_factory=list)
+    custom_sites: list[SiteConfig] = Field(default_factory=list)
 
 
 def load_config(path: Path | None = None) -> Config:

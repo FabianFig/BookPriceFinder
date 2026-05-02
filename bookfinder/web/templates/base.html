@@ -1,0 +1,108 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>{% block title %}BookPriceFinder{% endblock %}</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
+    <style type="text/tailwindcss">
+      @layer base {
+        body { @apply bg-white text-slate-900; }
+      }
+      @layer components {
+        .btn { @apply inline-flex items-center justify-center rounded-md px-4 py-2 text-sm font-medium transition-colors disabled:opacity-50 border; }
+        .btn-primary { @apply bg-slate-900 text-white border-slate-900 hover:bg-slate-800; }
+        .btn-secondary { @apply bg-white text-slate-700 border-slate-200 hover:bg-slate-50; }
+        .input { @apply h-9 rounded-md border border-slate-200 bg-white px-3 text-sm focus:outline-none focus:ring-1 focus:ring-slate-400 transition-all; }
+      }
+    </style>
+  </head>
+  <body class="min-h-screen flex flex-col font-sans" x-data="{ isSearching: false, showModal: false, historyTitle: '' }">
+    <nav class="border-b p-4">
+      <div class="max-w-3xl mx-auto flex justify-between items-center">
+        <div class="flex gap-6 items-center">
+          <a href="/" class="font-bold text-lg">BookFinder</a>
+          <div class="flex gap-4 text-sm text-slate-500">
+            <a href="/wishlist" class="hover:text-slate-900">Wishlist</a>
+            <a href="/status" class="hover:text-slate-900">Status</a>
+          </div>
+        </div>
+        <div class="flex gap-4 items-center">
+          <form action="/set-currency" method="post">
+            <select name="currency" onchange="this.form.submit()" class="bg-transparent text-sm border rounded p-1">
+              {% for curr in available_currencies %}
+                <option value="{{ curr }}" {% if curr == display_currency %}selected{% endif %}>{{ curr }}</option>
+              {% endfor %}
+            </select>
+          </form>
+        </div>
+      </div>
+    </nav>
+
+    <main class="max-w-3xl mx-auto p-6 w-full flex-1">
+      <form method="post" action="/search" @submit="isSearching = true" class="space-y-4 mb-8">
+        <div class="flex gap-2">
+          <input name="query" placeholder="Search..." required value="{{ query }}" class="flex-1 input h-10" />
+          <button type="submit" class="btn btn-primary h-10 px-6">
+            <span x-show="!isSearching">Search</span>
+            <span x-show="isSearching">...</span>
+          </button>
+        </div>
+        <div class="flex flex-wrap items-center gap-6 text-xs text-slate-500">
+          <label class="flex items-center gap-1"><input type="checkbox" name="isbn_only" value="1" {% if isbn_only %}checked{% endif %}> ISBN only</label>
+          <label>Sort: 
+            <select name="sort_by" class="bg-transparent border-none p-0 focus:ring-0">
+              <option value="price-asc">Price low-high</option>
+              <option value="price-desc">Price high-low</option>
+              <option value="title-asc">Title A-Z</option>
+            </select>
+          </label>
+          <label>Filter: <input name="filter" placeholder="Keyword..." value="{{ filter_text }}" class="bg-transparent border-b outline-none w-24"></label>
+        </div>
+      </form>
+
+      {% block content %}{% endblock %}
+    </main>
+
+    <footer class="border-t py-6 bg-slate-50">
+      <div class="max-w-3xl mx-auto px-5 text-[10px] text-slate-400 uppercase tracking-widest font-bold">
+        BookPriceFinder &middot; {{ sources|length if sources else '12' }} sources
+      </div>
+    </footer>
+
+    <!-- History Modal -->
+    <div x-show="showModal" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40" x-cloak>
+      <div class="relative w-full max-w-xl bg-white rounded-lg p-6 shadow-xl" @click.away="showModal = false">
+        <div class="flex justify-between items-center mb-4 text-sm font-bold">
+          <h3 x-text="historyTitle"></h3>
+          <button @click="showModal = false" class="text-xl">&times;</button>
+        </div>
+        <div class="w-full aspect-[2/1]"><canvas id="historyChart"></canvas></div>
+      </div>
+    </div>
+
+    <script>
+      let historyChart = null;
+      async function showHistory(title, isbn) {
+        const alpine = document.body.__x.$data;
+        alpine.historyTitle = title;
+        alpine.showModal = true;
+        await new Promise(r => setTimeout(r, 50));
+        const resp = await fetch(`/api/history?isbn=${isbn}&title=${encodeURIComponent(title)}`);
+        const data = await resp.json();
+        const ctx = document.getElementById('historyChart').getContext('2d');
+        if (historyChart) historyChart.destroy();
+        const sortedData = data.sort((a, b) => new Date(a.searched_at) - new Date(b.searched_at));
+        historyChart = new Chart(ctx, {
+          type: 'line',
+          data: {
+            labels: sortedData.map(d => new Date(d.searched_at).toLocaleDateString()),
+            datasets: [{ label: 'Price', data: sortedData.map(d => d.price + (d.shipping || 0)), borderColor: '#64748b', fill: false, tension: 0.1 }]
+          }
+        });
+      }
+    </script>
+  </body>
+</html>

@@ -2,10 +2,16 @@
 
 import sqlite3
 from pathlib import Path
+from typing import Optional
 
 from platformdirs import user_data_dir
 
-from bookfinder.models import BookResult
+from bookfinder.models import (
+    BookResult,
+    Condition,
+    ScraperHealthEntry,
+    WishlistEntry,
+)
 
 DEFAULT_DB_PATH = Path(user_data_dir("bookfinder")) / "prices.db"
 
@@ -47,6 +53,17 @@ CREATE TABLE IF NOT EXISTS saved_searches (
 );
 
 CREATE INDEX IF NOT EXISTS idx_saved_searches_name ON saved_searches(name);
+
+CREATE TABLE IF NOT EXISTS scraper_health (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    source TEXT NOT NULL,
+    success INTEGER NOT NULL,
+    error_message TEXT,
+    searched_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX IF NOT EXISTS idx_health_source ON scraper_health(source);
+CREATE INDEX IF NOT EXISTS idx_health_searched_at ON scraper_health(searched_at);
 """
 
 
@@ -67,10 +84,34 @@ class PriceDatabase:
     def __exit__(self, *args):
         self.close()
 
+    def _row_to_book_result(self, row: sqlite3.Row) -> BookResult:
+        return BookResult(
+            title=row["title"],
+            author=row["author"] or "Unknown",
+            price=row["price"],
+            currency=row["currency"],
+            condition=Condition(row["condition"] or "unknown"),
+            source=row["source"],
+            url=row["url"],
+            isbn=row["isbn"] or "",
+            shipping=row["shipping"],
+            searched_at=row["searched_at"],
+        )
+
+    def _row_to_wishlist_entry(self, row: sqlite3.Row) -> WishlistEntry:
+        return WishlistEntry(
+            id=row["id"],
+            title=row["title"],
+            author=row["author"] or "",
+            isbn=row["isbn"] or "",
+            max_price=row["max_price"],
+            added_at=row["added_at"],
+        )
+
     # ── Price History ──
 
     def save_results(self, results: list[BookResult]) -> int:
-        """Save search results to price history. Returns number of rows inserted."""
+        """Save search results to price history."""
         rows = [
             (
                 r.isbn,
@@ -96,52 +137,31 @@ class PriceDatabase:
 
     def get_price_history(
         self, isbn: str = "", title: str = "", limit: int = 50
-    ) -> list[dict]:
+    ) -> list[BookResult]:
         """Get price history for a book by ISBN or title."""
         if isbn:
             cursor = self._conn.execute(
-                """SELECT * FROM price_history
-                   WHERE isbn = ? ORDER BY searched_at DESC LIMIT ?""",
+                "SELECT * FROM price_history WHERE isbn = ? ORDER BY searched_at DESC LIMIT ?",
                 (isbn, limit),
             )
         elif title:
+            search_title = f"%{title.replace(' ', '%')}%"
             cursor = self._conn.execute(
                 """SELECT * FROM price_history
-                   WHERE title LIKE ? ORDER BY searched_at DESC LIMIT ?""",
-                (f"%{title}%", limit),
+                   WHERE title LIKE ? OR author LIKE ? 
+                   ORDER BY searched_at DESC LIMIT ?""",
+                (search_title, search_title, limit),
             )
         else:
             cursor = self._conn.execute(
                 "SELECT * FROM price_history ORDER BY searched_at DESC LIMIT ?",
                 (limit,),
             )
-        return [dict(row) for row in cursor.fetchall()]
+        return [self._row_to_book_result(row) for row in cursor.fetchall()]
 
-    def get_recent_results(
-        self, isbn: str = "", title: str = "", limit: int = 50
-    ) -> list[dict]:
-        """Get recent results for a query (offline mode)."""
-        if isbn:
-            cursor = self._conn.execute(
-                """SELECT * FROM price_history
-                   WHERE isbn = ? ORDER BY searched_at DESC LIMIT ?""",
-                (isbn, limit),
-            )
-        elif title:
-            cursor = self._conn.execute(
-                """SELECT * FROM price_history
-                   WHERE title LIKE ? ORDER BY searched_at DESC LIMIT ?""",
-                (f"%{title}%", limit),
-            )
-        else:
-            cursor = self._conn.execute(
-                "SELECT * FROM price_history ORDER BY searched_at DESC LIMIT ?",
-                (limit,),
-            )
-        return [dict(row) for row in cursor.fetchall()]
-
-    def get_lowest_price(self, isbn: str = "", title: str = "") -> dict | None:
+    def get_lowest_price(self, isbn: str = "", title: str = "") -> Optional[BookResult]:
         """Get the lowest price ever recorded for a book."""
+        where, param = ("", "")
         if isbn:
             where, param = "isbn = ?", isbn
         elif title:
@@ -157,17 +177,31 @@ class PriceDatabase:
             (param,),
         )
         row = cursor.fetchone()
-        return dict(row) if row else None
+        return self._row_to_book_result(row) if row else None
+
+    def get_average_price(self, isbn: str = "", title: str = "") -> float | None:
+        """Get the average price for a book from history."""
+        if isbn:
+            where, param = "isbn = ?", isbn
+        elif title:
+            where, param = "title LIKE ?", f"%{title}%"
+        else:
+            return None
+
+        row = self._conn.execute(
+            f"SELECT AVG(price + COALESCE(shipping, 0)) as avg_price FROM price_history WHERE {where} AND price > 0",
+            (param,),
+        ).fetchone()
+        return row["avg_price"] if row and row["avg_price"] else None
 
     # ── Wishlist ──
 
     def add_to_wishlist(
         self, title: str, author: str = "", isbn: str = "", max_price: float | None = None
     ) -> int:
-        """Add a book to the wishlist. Returns the wishlist entry ID."""
+        """Add a book to the wishlist."""
         cursor = self._conn.execute(
-            """INSERT INTO wishlist (title, author, isbn, max_price)
-               VALUES (?, ?, ?, ?)""",
+            "INSERT INTO wishlist (title, author, isbn, max_price) VALUES (?, ?, ?, ?)",
             (title, author, isbn, max_price),
         )
         self._conn.commit()
@@ -175,51 +209,36 @@ class PriceDatabase:
 
     def remove_from_wishlist(self, wishlist_id: int) -> bool:
         """Remove a book from the wishlist by ID."""
-        cursor = self._conn.execute(
-            "DELETE FROM wishlist WHERE id = ?", (wishlist_id,)
-        )
+        cursor = self._conn.execute("DELETE FROM wishlist WHERE id = ?", (wishlist_id,))
         self._conn.commit()
         return cursor.rowcount > 0
 
-    def get_wishlist(self) -> list[dict]:
+    def get_wishlist(self) -> list[WishlistEntry]:
         """Get all wishlist entries."""
-        cursor = self._conn.execute(
-            "SELECT * FROM wishlist ORDER BY added_at DESC"
-        )
-        return [dict(row) for row in cursor.fetchall()]
+        cursor = self._conn.execute("SELECT * FROM wishlist ORDER BY added_at DESC")
+        return [self._row_to_wishlist_entry(row) for row in cursor.fetchall()]
 
-    def check_wishlist_deals(self, results: list[BookResult]) -> list[tuple[dict, BookResult]]:
-        """Check if any search results match wishlist items under max_price.
-
-        Returns list of (wishlist_entry, matching_result) tuples.
-        """
+    def check_wishlist_deals(self, results: list[BookResult]) -> list[tuple[WishlistEntry, BookResult]]:
+        """Check if any search results match wishlist items under max_price."""
         wishlist = self.get_wishlist()
-        deals: list[tuple[dict, BookResult]] = []
-
+        deals = []
         for entry in wishlist:
-            max_price = entry.get("max_price")
-            if max_price is None:
+            if entry.max_price is None:
                 continue
-
             for result in results:
                 if result.price <= 0:
                     continue
-
-                # Match by ISBN or fuzzy title match
-                isbn_match = entry["isbn"] and entry["isbn"] == result.isbn
-                title_match = entry["title"].lower() in result.title.lower()
-
-                if (isbn_match or title_match) and result.total_price <= max_price:
+                isbn_match = entry.isbn and entry.isbn == result.isbn
+                title_match = entry.title.lower() in result.title.lower()
+                if (isbn_match or title_match) and result.total_price <= entry.max_price:
                     deals.append((entry, result))
-
         return deals
 
     # ── Saved Searches ──
 
     def save_search(self, name: str, params: dict) -> int:
-        """Save a search preset. Returns the saved search ID."""
+        """Save a search preset."""
         import json
-
         cursor = self._conn.execute(
             "INSERT INTO saved_searches (name, params) VALUES (?, ?)",
             (name, json.dumps(params)),
@@ -229,25 +248,47 @@ class PriceDatabase:
 
     def list_saved_searches(self) -> list[dict]:
         """List saved search presets."""
-        cursor = self._conn.execute(
-            "SELECT id, name, created_at FROM saved_searches ORDER BY created_at DESC"
-        )
+        cursor = self._conn.execute("SELECT id, name, created_at FROM saved_searches ORDER BY created_at DESC")
         return [dict(row) for row in cursor.fetchall()]
 
-    def get_saved_search(self, search_id: int) -> dict | None:
+    def get_saved_search(self, search_id: int) -> Optional[dict]:
         """Get a saved search by ID."""
-        cursor = self._conn.execute(
-            "SELECT * FROM saved_searches WHERE id = ?",
-            (search_id,),
-        )
+        cursor = self._conn.execute("SELECT * FROM saved_searches WHERE id = ?", (search_id,))
         row = cursor.fetchone()
         return dict(row) if row else None
 
     def delete_saved_search(self, search_id: int) -> bool:
         """Delete a saved search by ID."""
-        cursor = self._conn.execute(
-            "DELETE FROM saved_searches WHERE id = ?",
-            (search_id,),
-        )
+        cursor = self._conn.execute("DELETE FROM saved_searches WHERE id = ?", (search_id,))
         self._conn.commit()
         return cursor.rowcount > 0
+
+    # ── Scraper Health ──
+
+    def log_scraper_health(self, source: str, success: bool, error_message: str | None = None) -> None:
+        """Log the result of a scraper run."""
+        self._conn.execute(
+            "INSERT INTO scraper_health (source, success, error_message) VALUES (?, ?, ?)",
+            (source, 1 if success else 0, error_message),
+        )
+        self._conn.commit()
+
+    def get_scraper_health(self, limit_per_source: int = 20) -> list[ScraperHealthEntry]:
+        """Get the latest health logs for each source."""
+        cursor = self._conn.execute(
+            """SELECT * FROM (
+                 SELECT *, ROW_NUMBER() OVER (PARTITION BY source ORDER BY searched_at DESC) as rn
+                 FROM scraper_health
+               ) WHERE rn <= ? ORDER BY source, searched_at DESC""",
+            (limit_per_source,),
+        )
+        return [
+            ScraperHealthEntry(
+                id=row["id"],
+                source=row["source"],
+                success=bool(row["success"]),
+                error_message=row["error_message"],
+                searched_at=row["searched_at"],
+            )
+            for row in cursor.fetchall()
+        ]

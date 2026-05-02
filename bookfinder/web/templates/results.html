@@ -1,0 +1,66 @@
+{% extends "base.html" %}
+
+{% block content %}
+  <div class="space-y-4">
+    {% if not page_results %}
+      <p>No results.</p>
+    {% else %}
+      <div class="flex justify-between items-center text-xs text-slate-500 border-b pb-2">
+        <span>Found {{ total_results }} results ({{ report.elapsed|round(2) }}s)</span>
+        <form method="post" action="/save-search" class="flex gap-2">
+          <input name="name" placeholder="Save search..." required class="border rounded px-2 h-6" />
+          <input type="hidden" name="query" value="{{ query }}" />
+          <input type="hidden" name="max_results" value="{{ max_results }}" />
+          <input type="hidden" name="sort_by" value="{{ sort_by }}" />
+          <input type="hidden" name="filter" value="{{ filter_text }}" />
+          <input type="hidden" name="min_price" value="{{ min_price }}" />
+          <input type="hidden" name="max_price" value="{{ max_price }}" />
+          <input type="hidden" name="condition" value="{{ condition_filter }}" />
+          <input type="hidden" name="isbn_only" value="{{ '1' if isbn_only else '' }}" />
+          <input type="hidden" name="sources" value="{{ selected_sources|join(',') }}" />
+          <button type="submit" class="border rounded px-2 bg-slate-100 dark:bg-slate-800">Save</button>
+        </form>
+      </div>
+
+      <div class="divide-y dark:divide-slate-800">
+        {% for r in page_results %}
+        <div class="py-4 flex gap-4">
+          {% if r.cover_url %}
+            <img src="{{ r.cover_url }}" class="w-12 h-18 object-cover rounded" onerror="this.style.display='none'">
+          {% endif %}
+          <div class="flex-1">
+            <div class="flex justify-between">
+              <a href="{{ r.url }}" target="_blank" class="font-bold hover:underline">{{ r.title }}</a>
+              <span class="font-bold text-blue-600">
+                {% set sym = {'USD':'$', 'GBP':'£', 'EUR':'€'}.get(display_currency, display_currency) %}
+                {{ sym }}{{ "%.2f"|format(r.total_price) }}
+              </span>
+            </div>
+            <div class="text-xs text-slate-500">{{ r.author }} &middot; {{ r.source }} &middot; {{ r.condition.value }}</div>
+            <div class="mt-2 flex gap-4 text-[10px] uppercase font-bold text-slate-400">
+              <button onclick="showHistory('{{ r.title|replace("'","\\'") }}', '{{ r.isbn or '' }}')">History</button>
+              <a href="/wishlist?add_title={{ r.title|urlencode }}&add_author={{ r.author|urlencode }}&add_isbn={{ r.isbn|urlencode }}&add_price={{ "%.2f"|format(r.total_price) }}">Wishlist+</a>
+              {% if r.deal_score and r.deal_score > 0 %}
+                <span class="text-green-500">{{ (r.deal_score * 100)|round|int }}% Off Avg</span>
+              {% endif %}
+            </div>
+          </div>
+        </div>
+        {% endfor %}
+      </div>
+
+      <div class="flex gap-2 pt-6 overflow-x-auto pb-4">
+        {% for p in range(1, total_pages + 1) %}
+          {% if p == current_page %}
+            <span class="px-2 py-1 bg-slate-900 text-white rounded text-xs">{{ p }}</span>
+          {% else %}
+            <a href="/search?query={{ query|urlencode }}&max_results={{ max_results }}&sort_by={{ sort_by }}&filter={{ filter_text|urlencode }}&min_price={{ min_price }}&max_price={{ max_price }}&condition={{ condition_filter }}&isbn_only={{ '1' if isbn_only else '' }}{% for s in selected_sources %}&sources={{ s|urlencode }}{% endfor %}&page={{ p }}" 
+               class="px-2 py-1 border rounded text-xs hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors">
+              {{ p }}
+            </a>
+          {% endif %}
+        {% endfor %}
+      </div>
+    {% endif %}
+  </div>
+{% endblock %}

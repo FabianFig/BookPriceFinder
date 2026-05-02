@@ -1,10 +1,4 @@
-"""Open Library adapter — free API, no key required.
-
-Good for metadata enrichment and finding ISBNs. Doesn't have pricing
-directly but links to lending/buying options.
-"""
-
-import httpx
+"""Open Library adapter — free API, no key required."""
 
 from bookfinder.adapters.base import BaseAdapter
 from bookfinder.models import BookQuery, BookResult, Condition
@@ -29,10 +23,7 @@ class OpenLibraryAdapter(BaseAdapter):
         else:
             params["q"] = query.query
 
-        async with httpx.AsyncClient(timeout=15.0) as client:
-            resp = await client.get(f"{API_BASE}/search.json", params=params)
-            resp.raise_for_status()
-            data = resp.json()
+        data = await self._fetch_json(f"{API_BASE}/search.json", params=params)
 
         results: list[BookResult] = []
         for doc in data.get("docs", []):
@@ -44,7 +35,7 @@ class OpenLibraryAdapter(BaseAdapter):
                 BookResult(
                     title=doc.get("title", "Unknown"),
                     author=", ".join(doc.get("author_name", ["Unknown"])),
-                    price=0.0,  # Open Library is free/lending
+                    price=0.0,
                     currency="USD",
                     condition=Condition.UNKNOWN,
                     source=self.name,
